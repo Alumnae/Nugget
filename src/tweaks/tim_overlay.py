@@ -33,10 +33,13 @@ def board_config(series):
     raise ValueError("Unknown iPhone series in the BoardConfig table.")
 
 
+def overlay_board(series):
+    return board_config(series)[2].removeprefix("overrides_").removesuffix(".plist")
+
+
 def overlay_target(series, board, carrier_version):
-    boards = board_config(series)[2].removeprefix("overrides_").removesuffix(".plist").split("_")
-    if board not in boards:
-        raise ValueError("Select a BoardConfig belonging to the chosen iPhone series.")
+    if board != overlay_board(series):
+        raise ValueError("Use the complete BoardConfig group for the selected series, including underscores.")
     if not re.fullmatch(r"[0-9]{1,4}(?:\.[0-9]{1,4}){1,3}", carrier_version):
         raise ValueError("Enter the carrier settings version, for example 66.0 (not the iOS version).")
     return OVERLAY_DIR + f"device+carrier+22201+{board}+{carrier_version}.plist"
@@ -76,7 +79,7 @@ class OverlayJob:
     def prepare(cls, source, target, udid, backup_root, series=None, board=None, carrier_version=None):
         selected = board_config(series) if series is not None else None
         legacy = re.fullmatch(re.escape(OVERLAY_DIR) + r"device-[A-Za-z0-9_-]+\.plist", target)
-        named = re.fullmatch(re.escape(OVERLAY_DIR) + r"device\+carrier\+22201\+([A-Za-z0-9]+)\+([0-9]{1,4}(?:\.[0-9]{1,4}){1,3})\.plist", target)
+        named = re.fullmatch(re.escape(OVERLAY_DIR) + r"device\+carrier\+22201\+([A-Za-z0-9]+(?:_[A-Za-z0-9]+)*)\+([0-9]{1,4}(?:\.[0-9]{1,4}){1,3})\.plist", target)
         if not legacy and not named:
             raise ValueError("Invalid TIM overlay path; use device+carrier+22201+BOARD+VERSION.plist.")
         if board is not None or carrier_version is not None or named:
