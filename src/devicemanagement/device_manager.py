@@ -654,7 +654,7 @@ class DeviceManager:
             # Validate before any device write; never guess an overlay path or SIM slot.
             overlay_job, overlay_mode = OverlayState.job, OverlayState.mode
             if overlay_job is not None:
-                overlay_job.validate_device(self.get_current_device_udid(), self.get_current_device_version())
+                overlay_job.validate_device(self.get_current_device_udid(), self.get_current_device_version(), self.get_current_device_model())
                 if tweaks[TweakID.CreateBRFolders].enabled:
                     raise NuggetException("Disable Create BookRestore folders before applying a TIM overlay.")
                 use_bookrestore = True
