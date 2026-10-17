@@ -6,6 +6,7 @@ import plistlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from src.controllers.plist_handler import recursive_set
 
@@ -72,11 +73,11 @@ def patch_overlay(raw: bytes) -> bytes:
 
 @dataclass(frozen=True)
 class OverlayJob:
-    original: bytes
+    original: Optional[bytes]
     patched: bytes
     target: str
     udid: str
-    backup_dir: Path
+    backup_dir: Optional[Path]
     series: str = None
     board: str = None
     carrier_version: str = None
@@ -118,6 +119,32 @@ class OverlayJob:
             "identity": "User confirmed; not automatically verified on device",
         }, indent=2))
         return cls(raw, patched, target, udid, directory, series, board, carrier_version)
+
+    @classmethod
+    def prepare_direct(cls, series, carrier_version, udid):
+        """Use NanoRegistry's AdvancedPlistTweak flow: build, serialize, replace.
+
+        This does not read or merge with any existing device-side overlay.
+        """
+        from .tweak_classes import AdvancedPlistTweak
+
+        board = overlay_board(series)
+        target = overlay_target(series, board, carrier_version)
+        if not re.fullmatch(r"[A-Za-z0-9-]{8,64}", udid):
+            raise ValueError("Enter the connected iPhone UDID.")
+        # AdvancedPlistTweak uses the location as a dictionary key.
+        @dataclass(frozen=True)
+        class Location:
+            value: str
+
+        location = Location(target)
+        tweak = AdvancedPlistTweak(file_location=location, keyValues={
+            "RemoteCardProvisioningSettings": {"SupportedSKUs": ["SKU_EU", "SKU_CU"]}
+        })
+        tweak.set_enabled(True)
+        payloads = tweak.apply_tweak({})
+        contents = plistlib.dumps(payloads[location])
+        return cls(None, contents, target, udid, None, series, board, carrier_version)
 
     @classmethod
     def load_backup(cls, manifest):
