@@ -1,8 +1,8 @@
 from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QPushButton,
-                               QFileDialog, QInputDialog, QMessageBox, QComboBox)
-from src.tweaks.tim_overlay import OverlayJob, OverlayState, BOARD_CONFIGS, board_config
+                               QFileDialog, QInputDialog, QMessageBox, QComboBox, QLineEdit)
+from src.tweaks.tim_overlay import OverlayJob, OverlayState, BOARD_CONFIGS, board_config, overlay_target
 
 
 def show_tim_overlay(parent):
@@ -28,17 +28,53 @@ def show_tim_overlay(parent):
     reference.setTextInteractionFlags(Qt.TextSelectableByMouse)
     layout.addWidget(reference)
 
+    layout.addWidget(QLabel("BoardConfig of the active overlay:"))
+    boards = QComboBox()
+    boards.setObjectName("timOverlayBoardCombo")
+    layout.addWidget(boards)
+    layout.addWidget(QLabel("TIM carrier settings version (Settings > General > About):"))
+    carrier_version = QLineEdit()
+    carrier_version.setObjectName("timCarrierVersionEdit")
+    carrier_version.setPlaceholderText("For example: 66.0")
+    layout.addWidget(carrier_version)
+    target_path = QLineEdit()
+    target_path.setObjectName("timOverlayTargetEdit")
+    target_path.setReadOnly(True)
+    layout.addWidget(QLabel("Overlay destination:"))
+    layout.addWidget(target_path)
+
+    def update_target():
+        try:
+            target_path.setText(overlay_target(models.currentData(), boards.currentData(), carrier_version.text().strip()))
+        except ValueError as error:
+            target_path.clear()
+            target_path.setPlaceholderText(str(error))
+
     def update_reference():
         series = models.currentData()
+        boards.blockSignals(True)
+        boards.clear()
         if series is None:
             reference.setText("Select a series to see the matching bundle override filename.")
         else:
             entry = board_config(series)
-            reference.setText("TIM_Italy.bundle / " + entry[2] + "\nIPSW identifiers: "
-                              + ", ".join(entry[3]) + "\nReference only: this filename does not determine the active device-*.plist path.")
+            reference.setText("TIM_Italy.bundle / " + entry[2] + "\nIPSW identifiers: " + ", ".join(entry[3]))
+            tokens = entry[2].removeprefix("overrides_").removesuffix(".plist").split("_")
+            if len(tokens) > 1:
+                boards.addItem("Select the board from the original overlay filename…", None)
+            for token in tokens:
+                boards.addItem(token, token)
+        boards.blockSignals(False)
+        update_target()
+
     models.currentIndexChanged.connect(update_reference)
+    boards.currentIndexChanged.connect(update_target)
+    carrier_version.textChanged.connect(update_target)
     if OverlayState.job is not None and OverlayState.job.series is not None:
         models.setCurrentIndex(models.findData(OverlayState.job.series))
+        if OverlayState.job.board is not None:
+            boards.setCurrentIndex(boards.findData(OverlayState.job.board))
+            carrier_version.setText(OverlayState.job.carrier_version or "")
     status = QLabel("Staged: " + str(OverlayState.mode or "none"))
     layout.addWidget(status)
 
@@ -47,11 +83,16 @@ def show_tim_overlay(parent):
         if series is None:
             QMessageBox.information(dialog, "Select iPhone", "Select an iPhone series before importing the active overlay.")
             return
-        source, _ = QFileDialog.getOpenFileName(dialog, "Original active TIM overlay", "", "Plist (*.plist)")
+        try:
+            target = overlay_target(series, boards.currentData(), carrier_version.text().strip())
+        except ValueError as error:
+            QMessageBox.information(dialog, "Overlay destination", str(error))
+            return
+        source, _ = QFileDialog.getOpenFileName(dialog, "Original active TIM overlay: " + Path(target).name, "", "Plist (*.plist)")
         if not source:
             return
-        target, ok = QInputDialog.getText(dialog, "Resolved device path", "Exact original /var/mobile/Library/Carrier Bundles/Overlay/device-*.plist path:")
-        if not ok:
+        if Path(source).name != Path(target).name:
+            QMessageBox.information(dialog, "Overlay filename mismatch", "The imported original must have the destination filename: " + Path(target).name)
             return
         udid, ok = QInputDialog.getText(dialog, "iPhone identity", "UDID of the iPhone that supplied this overlay:")
         if not ok:
@@ -59,7 +100,7 @@ def show_tim_overlay(parent):
         if QMessageBox.question(dialog, "Confirm carrier identity", "Is this the original active overlay for TIM_Italy.bundle / 22201 on that iPhone? This is not automatically verified.") != QMessageBox.Yes:
             return
         try:
-            job = OverlayJob.prepare(source, target.strip(), udid.strip(), Path.home() / "Nugget-TIM-backups", series=series)
+            job = OverlayJob.prepare(source, target.strip(), udid.strip(), Path.home() / "Nugget-TIM-backups", series=series, board=boards.currentData(), carrier_version=carrier_version.text().strip())
             OverlayState.job, OverlayState.mode = job, "patch"
             status.setText("Staged: add SKU_CU. Backup: " + str(job.backup_dir))
         except Exception as error:
@@ -72,6 +113,10 @@ def show_tim_overlay(parent):
                 job = OverlayJob.load_backup(source)
                 OverlayState.job, OverlayState.mode = job, "restore"
                 models.setCurrentIndex(models.findData(job.series) if job.series is not None else 0)
+                if job.board is not None:
+                    boards.setCurrentIndex(boards.findData(job.board))
+                    carrier_version.setText(job.carrier_version or "")
+                target_path.setText(job.target)
                 status.setText("Staged: restore original overlay")
             except Exception as error:
                 QMessageBox.critical(dialog, "Cannot stage restore", str(error))
