@@ -54,3 +54,21 @@ Non commetterli né caricarli su GitHub.
 `python3 -m unittest discover -s tests -p 'test_tim_overlay.py' -v`
 
 Non sono stati eseguiti trasferimenti, attivazioni o test della finestra temporale.
+
+## Selezione modello e BoardConfig
+
+Il menu a tendina contiene le dieci serie della tabella fornita dall'utente
+(Air, 17, 16e, 16, 15, 14, SE 3, 13, 12, 11). Mostra il nome esatto
+`overrides_….plist` e gli identifier IPSW associati. La tabella è usata come
+riferimento fornito dall'utente, non come rilevamento dei file installati.
+
+La serie scelta viene salvata nel manifest; Apply verifica che il ProductType
+dell'iPhone collegato appartenga alla serie. Il ripristino recupera la selezione
+dal manifest. I vecchi backup privi di selezione restano utilizzabili con i
+controlli UDID e versione già previsti.
+
+Il file `TIM_Italy.bundle/overrides_….plist` è un override del bundle. Non è
+il file runtime `Overlay/device-….plist`: il menu non può dedurre il percorso
+di quest'ultimo. Il prototipo continua a importare l'overlay attivo completo
+e a richiedere il suo percorso esatto; non scrive il file override del bundle
+al posto dell'overlay.
