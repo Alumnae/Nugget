@@ -83,9 +83,16 @@ Per iPhone 16e, `V59` e `66.0` il nome è:
 
 `device+carrier+22201+V59+66.0.plist`
 
-Per le serie con più BoardConfig, scegli il token presente nel nome dell'overlay
-originale; non viene dedotto dall'ordine dei modelli nella tabella. Le serie con
-un solo token, come 16e, lo selezionano automaticamente.
+Il BoardConfig viene ricavato automaticamente dal nome override della serie,
+conservando l'intero gruppo con gli underscore. Non esiste un secondo menu
+per selezionare una singola board. Per esempio, iPhone 17 usa:
+
+`device+carrier+22201+V53_V54_V57+66.0.plist`
+
+Il 16 usa `D93_D94_D47_D48`; il 16e continua a usare `V59`.
+I backup creati dalla precedente versione con una singola board di un gruppo
+non vengono accettati come destinazioni corrette: reimporta l'originale con il
+nome completo.
 
 L'importazione richiede che il nome del file originale coincida con quello
 composto: una versione errata o una board diversa non viene applicata
