@@ -4,7 +4,7 @@ import plistlib
 import tempfile
 import unittest
 from pathlib import Path
-from src.tweaks.tim_overlay import OverlayJob, OVERLAY_DIR, patch_overlay
+from src.tweaks.tim_overlay import OverlayJob, OVERLAY_DIR, patch_overlay, BOARD_CONFIGS, board_config
 
 
 class TimOverlayTests(unittest.TestCase):
@@ -22,6 +22,28 @@ class TimOverlayTests(unittest.TestCase):
             self.assertEqual(plistlib.loads(result), expected)
             self.assertEqual(result.startswith(b"bplist00"), fmt == plistlib.FMT_BINARY)
             self.assertEqual(patch_overlay(result), result)
+
+    def test_boardconfig_table_and_device_matching(self):
+        self.assertEqual(len(BOARD_CONFIGS), 10)
+        identifiers = [identifier for entry in BOARD_CONFIGS for identifier in entry[3]]
+        self.assertEqual(len(identifiers), len(set(identifiers)))
+        self.assertEqual(board_config("12")[2], "overrides_D52g_D53g_D53p_D54p.plist")
+        self.assertEqual(board_config("Air")[3], ("iPhone18,4",))
+        with self.assertRaises(ValueError):
+            board_config("unknown")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "device-original.plist"
+            source.write_bytes(plistlib.dumps(self.original))
+            for series, label, filename, supported in BOARD_CONFIGS:
+                job = OverlayJob.prepare(source, OVERLAY_DIR + "device-test.plist", "12345678", root / "backups", series=series)
+                for identifier in supported:
+                    job.validate_device("12345678", "26.1", identifier)
+                with self.assertRaises(ValueError):
+                    job.validate_device("12345678", "26.1", "iPhone99,99")
+                manifest = job.backup_dir / "manifest.json"
+                self.assertEqual(json.loads(manifest.read_text())["boardconfig"], filename)
+                self.assertEqual(OverlayJob.load_backup(manifest).series, series)
 
     def test_reject_unexpected_plists(self):
         for value in ([], {}, {"RemoteCardProvisioningSettings": {"SupportedSKUs": "SKU_EU"}},
