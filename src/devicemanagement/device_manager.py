@@ -37,6 +37,7 @@ from src.exceptions.nugget_exception import NuggetException
 
 from src.tweaks.tweaks import tweaks, TweakID, FeatureFlagTweak, EligibilityTweak, AITweak, BookRestoreFileTweak, BasicPlistTweak, AdvancedPlistTweak, RdarFixTweak, NullifyFileTweak, StatusBarTweak, PasscodeThemeTweak
 from src.tweaks.custom_gestalt_tweaks import CustomGestaltTweaks
+from src.tweaks.tim_overlay import OverlayState
 from src.tweaks.posterboard.posterboard_tweak import PosterboardTweak
 from src.tweaks.posterboard.template_options.templates_tweak import TemplatesTweak
 from src.tweaks.basic_plist_locations import FileLocation
@@ -650,6 +651,14 @@ class DeviceManager:
             ]
             tmp_dirs = [] # temporary directory for unzipping pb and template files
 
+            # Validate before any device write; never guess an overlay path or SIM slot.
+            overlay_job, overlay_mode = OverlayState.job, OverlayState.mode
+            if overlay_job is not None:
+                overlay_job.validate_device(self.get_current_device_udid(), self.get_current_device_version())
+                if tweaks[TweakID.CreateBRFolders].enabled:
+                    raise NuggetException("Disable Create BookRestore folders before applying a TIM overlay.")
+                use_bookrestore = True
+
             # set the plist keys
             for tweak_name in tweaks:
                 tweak = tweaks[tweak_name]
@@ -719,6 +728,13 @@ class DeviceManager:
             if gestalt_plist != None:
                 gestalt_data = plistlib.dumps(gestalt_plist)
             
+            if overlay_job is not None:
+                self.concat_file(
+                    contents=overlay_job.original if overlay_mode == "restore" else overlay_job.patched,
+                    path=overlay_job.target, files_to_restore=files_to_restore,
+                    owner=501, group=501, use_bookrestore=True
+                )
+
             # Generate backup
             update_label(QCoreApplication.tr("Generating backup..."))
             if len(flag_plist) > 0:
@@ -811,6 +827,11 @@ class DeviceManager:
 
             # restore to the device
             final_alert = await self.start_restore(files_to_restore, use_bookrestore, update_label, skips_br_for_folders=tweaks[TweakID.CreateBRFolders].enabled, reboot_for_br=(len(flag_plist) > 0))
+            if overlay_job is not None:
+                OverlayState.clear()
+                final_alert.txt = ("Overlay transfer completed; acceptance by CommCenter and TIM activation "
+                                   "are NOT verified. Open Watch > Cellular to test. "
+                                   "Original backup: " + str(overlay_job.backup_dir))
             update_label(QCoreApplication.tr("Success!"))
         except Exception as e:
             final_alert = show_apply_error(e, update_label, files_list=files_to_restore)
