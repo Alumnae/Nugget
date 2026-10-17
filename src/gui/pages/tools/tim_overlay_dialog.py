@@ -78,6 +78,14 @@ def show_tim_overlay(parent):
     status = QLabel("Staged: " + str(OverlayState.mode or "none"))
     layout.addWidget(status)
 
+    def invalidate_staged_patch():
+        if OverlayState.mode == "patch":
+            OverlayState.clear()
+            status.setText("Selection changed: import the matching original again before Apply.")
+    models.currentIndexChanged.connect(invalidate_staged_patch)
+    boards.currentIndexChanged.connect(invalidate_staged_patch)
+    carrier_version.textChanged.connect(invalidate_staged_patch)
+
     def stage():
         series = models.currentData()
         if series is None:
