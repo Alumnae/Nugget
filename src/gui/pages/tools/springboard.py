@@ -29,6 +29,12 @@ class SpringboardPage(Page):
         self.createRadioBtns(key=TweakID.SBShowAuthenticationEngineeringUI, container=self.ui.authEngUIBtns)
         self.createRadioBtns(key=TweakID.UseFloatingTabBar, container=self.ui.floatingTabBarBtns, invert_values=True)
         
+        from PySide6.QtWidgets import QPushButton
+        from .tim_overlay_dialog import show_tim_overlay
+        if not hasattr(self, "tim_overlay_button"):
+            self.tim_overlay_button = QPushButton("TIM 22201: experimental Watch SKU…", self.ui.watchOSChk.parentWidget())
+            self.tim_overlay_button.clicked.connect(lambda: show_tim_overlay(self.ui.watchOSChk.window()))
+            self.ui.watchOSChk.parentWidget().layout().addWidget(self.tim_overlay_button)
         load_springboard()
 
     ## ACTIONS
