@@ -8,7 +8,8 @@ Non è stato provato su un iPhone: i test verificano solo la preparazione dei fi
 
 - iPhone con iOS **26.1**, relativo UDID e linea attiva TIM_Italy.bundle / 22201.
 - Copia originale dell'overlay effettivamente usato da quella linea e il suo
-  percorso risolto `/var/mobile/Library/Carrier Bundles/Overlay/device-….plist`.
+  nome esatto `device+carrier+22201+BOARD+VERSIONE.plist` nella cartella
+  `/var/mobile/Library/Carrier Bundles/Overlay/`.
   Non usare il percorso del symlink `com.apple.carrier_1.plist`.
 - Conferma che il Watch da attivare richieda SKU_CU.
 
@@ -21,8 +22,9 @@ né verificati sul dispositivo. Non usare overlay presi da altri dispositivi.
 
 Avvia da sorgente con le dipendenze previste dal README upstream.
 In SpringBoard Options seleziona **TIM 22201: experimental Watch SKU…**.
-Importa l'originale e indica percorso completo e UDID. Il prototipo conserva
-una copia sotto `~/Nugget-TIM-backups/<UDID>/<SHA256>/`, con manifest e plist
+Seleziona serie, BoardConfig e versione del gestore, poi importa l'originale
+e indica l'UDID. Il percorso di destinazione viene composto automaticamente. Il prototipo conserva
+una copia sotto `~/Nugget-TIM-backups/<UDID>/<SHA256>-<hash-percorso>/`, con manifest e plist
 modificato. L'unica modifica semantica è l'aggiunta di SKU_CU a SupportedSKUs,
 conservando SKU_EU e gli altri valori originali.
 
@@ -67,8 +69,30 @@ dell'iPhone collegato appartenga alla serie. Il ripristino recupera la selezione
 dal manifest. I vecchi backup privi di selezione restano utilizzabili con i
 controlli UDID e versione già previsti.
 
-Il file `TIM_Italy.bundle/overrides_….plist` è un override del bundle. Non è
-il file runtime `Overlay/device-….plist`: il menu non può dedurre il percorso
-di quest'ultimo. Il prototipo continua a importare l'overlay attivo completo
-e a richiedere il suo percorso esatto; non scrive il file override del bundle
-al posto dell'overlay.
+Il file `TIM_Italy.bundle/overrides_….plist` rimane distinto dall'overlay runtime.
+Il percorso runtime viene ora composto nel formato indicato dall'utente:
+
+`/var/mobile/Library/Carrier Bundles/Overlay/device+carrier+22201+BOARD+VERSIONE.plist`
+
+## Versione del gestore e destinazione
+
+Inserisci la versione delle impostazioni TIM visualizzata in Impostazioni >
+Generali > Info (per esempio `66.0`), non la versione iOS. Il campo destinazione
+è di sola lettura e si aggiorna quando cambi serie, BoardConfig o versione.
+Per iPhone 16e, `V59` e `66.0` il nome è:
+
+`device+carrier+22201+V59+66.0.plist`
+
+Per le serie con più BoardConfig, scegli il token presente nel nome dell'overlay
+originale; non viene dedotto dall'ordine dei modelli nella tabella. Le serie con
+un solo token, come 16e, lo selezionano automaticamente.
+
+L'importazione richiede che il nome del file originale coincida con quello
+composto: una versione errata o una board diversa non viene applicata
+silenziosamente. Il prototipo non rileva automaticamente la versione TIM né
+verifica l'esistenza del file remoto. Non rinominare un overlay diverso per
+aggirare il controllo.
+
+BoardConfig, versione e destinazione vengono conservati nel backup per il
+ripristino. Backup dello stesso contenuto ma destinati a versioni diverse
+restano separati. I vecchi backup `device-….plist` rimangono leggibili.
