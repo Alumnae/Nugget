@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.controllers.plist_handler import recursive_set
+
 OVERLAY_DIR = "/var/mobile/Library/Carrier Bundles/Overlay/"
 
 
@@ -58,8 +60,12 @@ def patch_overlay(raw: bytes) -> bytes:
         raise ValueError("SupportedSKUs must be a nonempty array of strings.")
     if "SKU_EU" not in skus:
         raise ValueError("Expected SKU_EU in the original TIM overlay.")
-    if "SKU_CU" not in skus:
-        skus.append("SKU_CU")
+    # Reuse Nugget's existing value-edit helper, scoped to provisioning settings.
+    # The input is the full imported overlay, not a partial replacement plist.
+    updated_skus = list(skus)
+    if "SKU_CU" not in updated_skus:
+        updated_skus.append("SKU_CU")
+    settings.update(recursive_set({"SupportedSKUs": skus}, "SupportedSKUs", updated_skus))
     fmt = plistlib.FMT_BINARY if raw.startswith(b"bplist00") else plistlib.FMT_XML
     return plistlib.dumps(patched, fmt=fmt, sort_keys=False)
 
