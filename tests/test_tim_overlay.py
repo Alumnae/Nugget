@@ -4,7 +4,7 @@ import plistlib
 import tempfile
 import unittest
 from pathlib import Path
-from src.tweaks.tim_overlay import OverlayJob, OVERLAY_DIR, patch_overlay, BOARD_CONFIGS, board_config
+from src.tweaks.tim_overlay import OverlayJob, OVERLAY_DIR, patch_overlay, BOARD_CONFIGS, board_config, overlay_target
 
 
 class TimOverlayTests(unittest.TestCase):
@@ -44,6 +44,29 @@ class TimOverlayTests(unittest.TestCase):
                 manifest = job.backup_dir / "manifest.json"
                 self.assertEqual(json.loads(manifest.read_text())["boardconfig"], filename)
                 self.assertEqual(OverlayJob.load_backup(manifest).series, series)
+
+    def test_named_overlay_version_and_backup(self):
+        expected = OVERLAY_DIR + "device+carrier+22201+V59+66.0.plist"
+        self.assertEqual(overlay_target("16e", "V59", "66.0"), expected)
+        for version in ("", "66", "66/0", "../66.0", "66.0.plist", "66.0+evil", "66..0"):
+            with self.assertRaises(ValueError):
+                overlay_target("16e", "V59", version)
+        with self.assertRaises(ValueError):
+            overlay_target("16e", "D23", "66.0")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "device+carrier+22201+V59+66.0.plist"
+            source.write_bytes(plistlib.dumps(self.original))
+            job = OverlayJob.prepare(source, expected, "12345678", root / "backups", "16e", "V59", "66.0")
+            loaded = OverlayJob.load_backup(job.backup_dir / "manifest.json")
+            self.assertEqual((loaded.target, loaded.board, loaded.carrier_version), (expected, "V59", "66.0"))
+            other = OverlayJob.prepare(source, overlay_target("16e", "V59", "67.0"), "12345678", root / "backups", "16e", "V59", "67.0")
+            self.assertNotEqual(job.backup_dir, other.backup_dir)
+            self.assertEqual(OverlayJob.load_backup(job.backup_dir / "manifest.json").target, expected)
+            with self.assertRaises(ValueError):
+                OverlayJob.prepare(source, expected, "12345678", root / "backups", "16e", "V59", "67.0")
+            with self.assertRaises(ValueError):
+                OverlayJob.prepare(source, expected.replace("22201", "22210"), "12345678", root / "backups", "16e", "V59", "66.0")
 
     def test_reject_unexpected_plists(self):
         for value in ([], {}, {"RemoteCardProvisioningSettings": {"SupportedSKUs": "SKU_EU"}},
