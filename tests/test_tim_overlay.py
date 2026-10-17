@@ -4,7 +4,7 @@ import plistlib
 import tempfile
 import unittest
 from pathlib import Path
-from src.tweaks.tim_overlay import OverlayJob, OVERLAY_DIR, patch_overlay, BOARD_CONFIGS, board_config, overlay_target
+from src.tweaks.tim_overlay import OverlayJob, OVERLAY_DIR, patch_overlay, BOARD_CONFIGS, board_config, overlay_target, overlay_board
 
 
 class TimOverlayTests(unittest.TestCase):
@@ -67,6 +67,24 @@ class TimOverlayTests(unittest.TestCase):
                 OverlayJob.prepare(source, expected, "12345678", root / "backups", "16e", "V59", "67.0")
             with self.assertRaises(ValueError):
                 OverlayJob.prepare(source, expected.replace("22201", "22210"), "12345678", root / "backups", "16e", "V59", "66.0")
+
+    def test_grouped_board_filenames(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "original.plist"
+            source.write_bytes(plistlib.dumps(self.original))
+            for series, label, filename, identifiers in BOARD_CONFIGS:
+                group = filename.removeprefix("overrides_").removesuffix(".plist")
+                self.assertEqual(overlay_board(series), group)
+                target = overlay_target(series, group, "66.0")
+                self.assertEqual(target, OVERLAY_DIR + f"device+carrier+22201+{group}+66.0.plist")
+                job = OverlayJob.prepare(source, target, "12345678", root / "backups", series, group, "66.0")
+                self.assertEqual(OverlayJob.load_backup(job.backup_dir / "manifest.json").board, group)
+                if "_" in group:
+                    with self.assertRaises(ValueError):
+                        overlay_target(series, group.split("_")[0], "66.0")
+        self.assertEqual(overlay_target("17", overlay_board("17"), "66.0"),
+                         OVERLAY_DIR + "device+carrier+22201+V53_V54_V57+66.0.plist")
 
     def test_reject_unexpected_plists(self):
         for value in ([], {}, {"RemoteCardProvisioningSettings": {"SupportedSKUs": "SKU_EU"}},
